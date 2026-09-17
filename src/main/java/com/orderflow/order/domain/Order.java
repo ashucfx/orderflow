@@ -52,11 +52,16 @@ public class Order {
         updatedAt = Instant.now();
     }
 
+    public void addItem(OrderItem item) {
+        items.add(item);
+        item.setOrder(this);
+    }
+
     public void transitionTo(OrderStatus next) {
         if (!status.canTransitionTo(next)) {
-            throw new IllegalStateException(
-                    "Invalid order state transition: " + status + " → " + next);
+            throw new com.orderflow.common.exception.InvalidStateTransitionException(
+                    "Invalid order state transition: " + status + " -> " + next);
         }
-        status = next;
+        this.status = next;
     }
 }

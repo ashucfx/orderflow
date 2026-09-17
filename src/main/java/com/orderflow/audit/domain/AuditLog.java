@@ -1,19 +1,16 @@
 package com.orderflow.audit.domain;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
+import lombok.*;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "audit_logs")
 public class AuditLog {
@@ -35,10 +32,10 @@ public class AuditLog {
     @Column(name = "entity_id", nullable = false, length = 100)
     private String entityId;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "metadata", columnDefinition = "jsonb")
-    private Map<String, Object> metadata;
+    @Column(name = "metadata", columnDefinition = "JSONB")
+    private String metadata;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @Builder.Default
     private Instant createdAt = Instant.now();
 }

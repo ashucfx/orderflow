@@ -49,6 +49,9 @@ class PaymentServiceTest {
     @Mock
     private InventoryService inventoryService;
 
+    @Mock
+    private com.orderflow.order.kafka.OrderEventProducer orderEventProducer;
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 

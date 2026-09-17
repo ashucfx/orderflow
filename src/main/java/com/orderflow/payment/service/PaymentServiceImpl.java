@@ -33,6 +33,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final InventoryService inventoryService;
+    private final com.orderflow.order.kafka.OrderEventProducer orderEventProducer;
 
     @Override
     @Transactional
@@ -83,6 +84,14 @@ public class PaymentServiceImpl implements PaymentService {
             }
             orderRepository.save(order);
 
+            orderEventProducer.sendOrderCancelled(com.orderflow.order.event.OrderCancelledEvent.builder()
+                    .orderId(order.getId())
+                    .userId(order.getUser().getId())
+                    .userEmail(order.getUser().getEmail())
+                    .reason("Payment processing failed")
+                    .timestamp(java.time.Instant.now())
+                    .build());
+
             return PaymentResponse.fromEntity(payment);
         }
 
@@ -95,6 +104,15 @@ public class PaymentServiceImpl implements PaymentService {
             inventoryService.confirmStock(item.getProduct().getId(), item.getQuantity());
         }
         orderRepository.save(order);
+
+        orderEventProducer.sendOrderConfirmed(com.orderflow.order.event.OrderConfirmedEvent.builder()
+                .orderId(order.getId())
+                .userId(order.getUser().getId())
+                .userEmail(order.getUser().getEmail())
+                .totalAmount(order.getTotalAmount())
+                .paymentId(savedPayment.getId())
+                .timestamp(java.time.Instant.now())
+                .build());
 
         return PaymentResponse.fromEntity(savedPayment);
     }

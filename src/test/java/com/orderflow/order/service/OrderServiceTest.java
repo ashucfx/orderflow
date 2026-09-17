@@ -54,6 +54,9 @@ class OrderServiceTest {
     @Mock
     private com.orderflow.common.idempotency.service.IdempotencyService idempotencyService;
 
+    @Mock
+    private com.orderflow.order.kafka.OrderEventProducer orderEventProducer;
+
     @InjectMocks
     private OrderServiceImpl orderService;
 
@@ -63,7 +66,7 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderRepository, cartRepository, userRepository, inventoryService, idempotencyService);
+        orderService = new OrderServiceImpl(orderRepository, cartRepository, userRepository, inventoryService, idempotencyService, orderEventProducer);
 
         Role customerRole = new Role();
         customerRole.setId((short) 1);

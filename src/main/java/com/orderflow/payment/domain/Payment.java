@@ -38,4 +38,19 @@ public class Payment {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+
+    public void markSuccess() {
+        this.status = PaymentStatus.SUCCESS;
+        this.processedAt = Instant.now();
+    }
+
+    public void markFailed() {
+        this.status = PaymentStatus.FAILED;
+        this.processedAt = Instant.now();
+    }
+
+    public void markRefunded() {
+        this.status = PaymentStatus.REFUNDED;
+        this.processedAt = Instant.now();
+    }
 }

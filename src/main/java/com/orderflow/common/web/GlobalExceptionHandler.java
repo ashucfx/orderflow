@@ -47,6 +47,11 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "Conflict", ex.getMessage(), req.getRequestURI(), null);
     }
 
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex, HttpServletRequest req) {
+        return build(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), req.getRequestURI(), null);
+    }
+
     @ExceptionHandler({
             org.springframework.orm.ObjectOptimisticLockingFailureException.class,
             jakarta.persistence.OptimisticLockException.class

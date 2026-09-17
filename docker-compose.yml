@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  orderflow-db:
+    image: postgres:16-alpine
+    container_name: orderflow-db
+    environment:
+      POSTGRES_DB: orderflow
+      POSTGRES_USER: orderflow
+      POSTGRES_PASSWORD: orderflow_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orderflow -d orderflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - orderflow-net
+
+  orderflow-redis:
+    image: redis:7-alpine
+    container_name: orderflow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - orderflow-net
+
+  orderflow-zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: orderflow-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - orderflow-net
+
+  orderflow-kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: orderflow-kafka
+    depends_on:
+      - orderflow-zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: orderflow-zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://orderflow-kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - orderflow-net
+
+  orderflow-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orderflow-app
+    ports:
+      - "8080:8080"
+    depends_on:
+      orderflow-db:
+        condition: service_healthy
+      orderflow-redis:
+        condition: service_healthy
+      orderflow-kafka:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8080
+      DB_HOST: orderflow-db
+      DB_PORT: 5432
+      DB_NAME: orderflow
+      DB_USERNAME: orderflow
+      DB_PASSWORD: orderflow_password
+      REDIS_HOST: orderflow-redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: orderflow-kafka:29092
+      JWT_SECRET: ZmQ0MmQ4YjYtYWI5NS00NmEyLThmMDgtZTA5OGFiYzg2ZmEyCg==
+      JWT_ACCESS_TOKEN_EXPIRY_MS: 900000
+      JWT_REFRESH_TOKEN_EXPIRY_DAYS: 7
+      CACHE_PRODUCT_TTL_SECONDS: 300
+      IDEMPOTENCY_KEY_TTL_SECONDS: 86400
+    networks:
+      - orderflow-net
+
+networks:
+  orderflow-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

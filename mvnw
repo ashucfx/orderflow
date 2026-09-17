@@ -20,5 +20,6 @@ if [ ! -e "$WRAPPER_JAR" ]; then
 fi
 
 exec "$JAVA_CMD" \
+    -Dmaven.multiModuleProjectDirectory="$MAVEN_PROJECTBASEDIR" \
     -classpath "$WRAPPER_JAR" \
     "$WRAPPER_LAUNCHER" "$@"

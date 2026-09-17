@@ -8,6 +8,8 @@ import com.orderflow.product.dto.CreateCategoryRequest;
 import com.orderflow.product.dto.UpdateCategoryRequest;
 import com.orderflow.product.repository.CategoryRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryRepository categoryRepository;
 
     @Override
+    @Cacheable(value = "categories", key = "'all'")
     public List<CategoryResponse> getAllCategories() {
         return categoryRepository.findAll().stream()
                 .map(CategoryResponse::fromEntity)
@@ -29,6 +32,7 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     @Override
+    @Cacheable(value = "categories", key = "#id")
     public CategoryResponse getCategoryById(UUID id) {
         Category category = findCategoryById(id);
         return CategoryResponse.fromEntity(category);
@@ -36,6 +40,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "categories", allEntries = true)
     public CategoryResponse createCategory(CreateCategoryRequest request) {
         String trimmedName = request.getName().trim();
         if (categoryRepository.existsByName(trimmedName)) {
@@ -52,6 +57,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "categories", allEntries = true)
     public CategoryResponse updateCategory(UUID id, UpdateCategoryRequest request) {
         Category category = findCategoryById(id);
         String trimmedName = request.getName().trim();
@@ -69,6 +75,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "categories", allEntries = true)
     public void deleteCategory(UUID id) {
         Category category = findCategoryById(id);
         categoryRepository.delete(category);

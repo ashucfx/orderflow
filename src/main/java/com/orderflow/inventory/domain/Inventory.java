@@ -1,5 +1,6 @@
 package com.orderflow.inventory.domain;
 
+import com.orderflow.common.exception.InsufficientInventoryException;
 import com.orderflow.product.domain.Product;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -46,20 +47,46 @@ public class Inventory {
         updatedAt = Instant.now();
     }
 
+    public void adjust(int amount) {
+        if (amount < 0 && availableQuantity < Math.abs(amount)) {
+            throw new InsufficientInventoryException(
+                    "Cannot deduct " + Math.abs(amount) + " items. Available stock is: " + availableQuantity
+            );
+        }
+        this.availableQuantity += amount;
+    }
+
     public void reserve(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Reservation quantity must be greater than zero");
+        }
         if (availableQuantity < quantity) {
-            throw new IllegalStateException("Insufficient stock for product: " + product.getId());
+            throw new InsufficientInventoryException(
+                    "Insufficient stock for product. Requested: " + quantity + ", available: " + availableQuantity
+            );
         }
         availableQuantity -= quantity;
         reservedQuantity += quantity;
     }
 
     public void release(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Release quantity must be greater than zero");
+        }
+        if (reservedQuantity < quantity) {
+            throw new IllegalStateException("Cannot release more than currently reserved: " + reservedQuantity);
+        }
         reservedQuantity -= quantity;
         availableQuantity += quantity;
     }
 
     public void confirm(int quantity) {
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Confirmation quantity must be greater than zero");
+        }
+        if (reservedQuantity < quantity) {
+            throw new IllegalStateException("Cannot confirm more than currently reserved: " + reservedQuantity);
+        }
         reservedQuantity -= quantity;
         soldQuantity += quantity;
     }

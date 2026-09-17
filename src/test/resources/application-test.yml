@@ -3,6 +3,8 @@ spring:
     url: jdbc:postgresql://localhost:5432/orderflow_test
     username: test
     password: test
+  cache:
+    type: none
   flyway:
     enabled: false
   data:

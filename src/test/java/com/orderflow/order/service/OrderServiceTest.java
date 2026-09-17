@@ -19,6 +19,7 @@ import com.orderflow.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -50,6 +51,10 @@ class OrderServiceTest {
     @Mock
     private InventoryService inventoryService;
 
+    @Mock
+    private com.orderflow.common.idempotency.service.IdempotencyService idempotencyService;
+
+    @InjectMocks
     private OrderServiceImpl orderService;
 
     private User sampleUser;
@@ -58,7 +63,7 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderServiceImpl(orderRepository, cartRepository, userRepository, inventoryService);
+        orderService = new OrderServiceImpl(orderRepository, cartRepository, userRepository, inventoryService, idempotencyService);
 
         Role customerRole = new Role();
         customerRole.setId((short) 1);
@@ -244,5 +249,31 @@ class OrderServiceTest {
 
         assertThat(response.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         verify(inventoryService).releaseStock(sampleProduct.getId(), 1);
+    }
+
+    @Test
+    void checkout_whenConcurrentInsertCausesDataIntegrityViolation_replaysExistingOrder() {
+        sampleCart.addItem(sampleProduct, 1);
+        CheckoutRequest request = new CheckoutRequest("CONCURRENT-KEY");
+
+        Order existingOrder = new Order();
+        existingOrder.setId(UUID.randomUUID());
+        existingOrder.setUser(sampleUser);
+        existingOrder.setStatus(OrderStatus.PENDING);
+        existingOrder.setTotalAmount(new BigDecimal("100.00"));
+        existingOrder.setIdempotencyKey("CONCURRENT-KEY");
+
+        when(userRepository.findByEmail("shopper@example.com")).thenReturn(Optional.of(sampleUser));
+        when(orderRepository.findByIdempotencyKey("CONCURRENT-KEY"))
+                .thenReturn(Optional.empty()) // first check: not found
+                .thenReturn(Optional.of(existingOrder)); // second check after conflict: found!
+        when(cartRepository.findByUserId(sampleUser.getId())).thenReturn(Optional.of(sampleCart));
+        when(orderRepository.save(any(Order.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
+
+        OrderResponse response = orderService.checkout("shopper@example.com", request);
+
+        assertThat(response.getId()).isEqualTo(existingOrder.getId());
+        assertThat(response.getIdempotencyKey()).isEqualTo("CONCURRENT-KEY");
     }
 }

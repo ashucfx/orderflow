@@ -36,15 +36,23 @@ public class OrderServiceImpl implements OrderService {
     private final CartRepository cartRepository;
     private final UserRepository userRepository;
     private final InventoryService inventoryService;
+    private final com.orderflow.common.idempotency.service.IdempotencyService idempotencyService;
+
+    @org.springframework.beans.factory.annotation.Value("${app.idempotency.ttl-seconds:86400}")
+    private long idempotencyTtlSeconds = 86400;
 
     @Override
     @Transactional
     public OrderResponse checkout(String userEmail, CheckoutRequest request) {
         User user = findUserByEmail(userEmail);
 
+        String idempotencyKey = (request != null && request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank())
+                ? request.getIdempotencyKey().trim()
+                : null;
+
         // Check for idempotency replay if key provided
-        if (request != null && request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
-            Optional<Order> existing = orderRepository.findByIdempotencyKey(request.getIdempotencyKey().trim());
+        if (idempotencyKey != null) {
+            Optional<Order> existing = orderRepository.findByIdempotencyKey(idempotencyKey);
             if (existing.isPresent()) {
                 return OrderResponse.fromEntity(existing.get());
             }
@@ -60,8 +68,8 @@ public class OrderServiceImpl implements OrderService {
         Order order = new Order();
         order.setUser(user);
         order.setStatus(OrderStatus.PENDING);
-        if (request != null && request.getIdempotencyKey() != null && !request.getIdempotencyKey().isBlank()) {
-            order.setIdempotencyKey(request.getIdempotencyKey().trim());
+        if (idempotencyKey != null) {
+            order.setIdempotencyKey(idempotencyKey);
         }
 
         BigDecimal totalAmount = BigDecimal.ZERO;
@@ -84,7 +92,25 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setTotalAmount(totalAmount);
-        Order savedOrder = orderRepository.save(order);
+
+        Order savedOrder;
+        try {
+            savedOrder = orderRepository.save(order);
+            if (idempotencyKey != null) {
+                try {
+                    idempotencyService.saveRecord(idempotencyKey, 201, savedOrder.getId().toString(), idempotencyTtlSeconds);
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            if (idempotencyKey != null) {
+                Optional<Order> existing = orderRepository.findByIdempotencyKey(idempotencyKey);
+                if (existing.isPresent()) {
+                    return OrderResponse.fromEntity(existing.get());
+                }
+            }
+            throw ex;
+        }
 
         // Clear cart items on successful order placement
         cart.clear();

@@ -37,6 +37,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final InventoryService inventoryService;
     private final com.orderflow.common.idempotency.service.IdempotencyService idempotencyService;
+    private final com.orderflow.order.kafka.OrderEventProducer orderEventProducer;
 
     @org.springframework.beans.factory.annotation.Value("${app.idempotency.ttl-seconds:86400}")
     private long idempotencyTtlSeconds = 86400;
@@ -116,6 +117,15 @@ public class OrderServiceImpl implements OrderService {
         cart.clear();
         cartRepository.save(cart);
 
+        orderEventProducer.sendOrderPlaced(com.orderflow.order.event.OrderPlacedEvent.builder()
+                .orderId(savedOrder.getId())
+                .userId(user.getId())
+                .userEmail(user.getEmail())
+                .totalAmount(savedOrder.getTotalAmount())
+                .itemCount(savedOrder.getItems().size())
+                .timestamp(savedOrder.getCreatedAt())
+                .build());
+
         return OrderResponse.fromEntity(savedOrder);
     }
 
@@ -171,6 +181,25 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Order saved = orderRepository.save(order);
+
+        if (nextStatus == OrderStatus.CONFIRMED && previousStatus == OrderStatus.PENDING) {
+            orderEventProducer.sendOrderConfirmed(com.orderflow.order.event.OrderConfirmedEvent.builder()
+                    .orderId(saved.getId())
+                    .userId(saved.getUser().getId())
+                    .userEmail(saved.getUser().getEmail())
+                    .totalAmount(saved.getTotalAmount())
+                    .timestamp(java.time.Instant.now())
+                    .build());
+        } else if (nextStatus == OrderStatus.CANCELLED) {
+            orderEventProducer.sendOrderCancelled(com.orderflow.order.event.OrderCancelledEvent.builder()
+                    .orderId(saved.getId())
+                    .userId(saved.getUser().getId())
+                    .userEmail(saved.getUser().getEmail())
+                    .reason("Order status updated to CANCELLED")
+                    .timestamp(java.time.Instant.now())
+                    .build());
+        }
+
         return OrderResponse.fromEntity(saved);
     }
 
@@ -194,6 +223,15 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Order saved = orderRepository.save(order);
+
+        orderEventProducer.sendOrderCancelled(com.orderflow.order.event.OrderCancelledEvent.builder()
+                .orderId(saved.getId())
+                .userId(saved.getUser().getId())
+                .userEmail(saved.getUser().getEmail())
+                .reason("Order cancelled by user")
+                .timestamp(java.time.Instant.now())
+                .build());
+
         return OrderResponse.fromEntity(saved);
     }
 

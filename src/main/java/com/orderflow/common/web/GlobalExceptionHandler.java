@@ -47,6 +47,14 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, "Conflict", ex.getMessage(), req.getRequestURI(), null);
     }
 
+    @ExceptionHandler({
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            jakarta.persistence.OptimisticLockException.class
+    })
+    public ResponseEntity<ErrorResponse> handleOptimisticLock(Exception ex, HttpServletRequest req) {
+        return build(HttpStatus.CONFLICT, "Conflict", "The resource was updated concurrently by another transaction. Please retry.", req.getRequestURI(), null);
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleForbidden(HttpServletRequest req) {
         return build(HttpStatus.FORBIDDEN, "Forbidden", "Access denied", req.getRequestURI(), null);
